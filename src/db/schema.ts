@@ -10,7 +10,8 @@ export function initDatabase(dbPath: string): Database.Database {
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS thoughts (
-      id TEXT PRIMARY KEY,
+      rowid INTEGER PRIMARY KEY AUTOINCREMENT,
+      id TEXT UNIQUE NOT NULL,
       text TEXT NOT NULL,
       type TEXT NOT NULL DEFAULT 'general',
       source TEXT,

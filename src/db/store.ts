@@ -68,16 +68,10 @@ export function insertThought(
     now
   );
 
-  // Insert embedding into vector table using the rowid
-  const rowid = db
-    .prepare("SELECT rowid FROM thoughts WHERE id = ?")
-    .get(id) as { rowid: number } | undefined;
-
-  if (rowid) {
-    db.prepare(
-      "INSERT INTO thought_vectors (rowid, embedding) VALUES (?, ?)"
-    ).run(rowid.rowid, Buffer.from(embedding.buffer));
-  }
+  // Insert embedding into vector table — sqlite-vec requires rowid via SQL subquery, not JS binding
+  db.prepare(
+    "INSERT INTO thought_vectors (rowid, embedding) VALUES ((SELECT rowid FROM thoughts WHERE id = ?), ?)"
+  ).run(id, Buffer.from(embedding.buffer));
 
   return {
     id,
@@ -104,13 +98,10 @@ export function getThought(
 }
 
 export function deleteThought(db: Database.Database, id: string): boolean {
-  const rowid = db
-    .prepare("SELECT rowid FROM thoughts WHERE id = ?")
-    .get(id) as { rowid: number } | undefined;
-
-  if (!rowid) return false;
-
-  db.prepare("DELETE FROM thought_vectors WHERE rowid = ?").run(rowid.rowid);
+  // Delete vector first using subquery
+  db.prepare(
+    "DELETE FROM thought_vectors WHERE rowid = (SELECT rowid FROM thoughts WHERE id = ?)"
+  ).run(id);
   const result = db.prepare("DELETE FROM thoughts WHERE id = ?").run(id);
   return result.changes > 0;
 }

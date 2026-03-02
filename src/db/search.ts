@@ -68,7 +68,7 @@ export function vectorSearch(
         actions: JSON.parse(row.actions) as string[],
       },
       distance: vr.distance,
-      score: Math.max(0, 1 - vr.distance),
+      score: Math.round(Math.max(0, 1 / (1 + vr.distance)) * 100) / 100,
     });
 
     if (results.length >= limit) break;

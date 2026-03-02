@@ -12,6 +12,18 @@ const NON_NAMES = new Set([
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
   "Today", "Tomorrow", "Yesterday",
+  // Common sentence starters / pronouns / verbs
+  "Had", "Has", "Have", "Was", "Were", "Did", "Does", "Do",
+  "She", "He", "They", "We", "It", "Its", "Our", "My", "Your",
+  "Also", "But", "And", "Not", "Just", "So", "If", "Or",
+  "Decision", "Decided", "Should", "Could", "Would", "Will", "Can", "May", "Might",
+  "Need", "Must", "Want", "Going", "Been", "Being",
+  "Interesting", "Important", "Great", "Good", "New", "First", "Last",
+  "Some", "Any", "All", "Each", "Every", "Many", "Much", "Most",
+  "After", "Before", "During", "Since", "Until", "While",
+  "Really", "Very", "Quite", "Pretty", "Still", "Already",
+  "However", "Although", "Though", "Because", "Therefore", "Furthermore",
+  "TODO", "FIXME", "NOTE", "UPDATE", "ACTION",
 ]);
 
 const ACTION_PATTERNS = [
@@ -71,6 +83,16 @@ export class RulesExtractor implements MetadataExtractor {
     while ((match = NAME_PATTERN.exec(text)) !== null) {
       const name = match[1].trim();
       // Filter out common non-name words
+      const firstWord = name.split(" ")[0];
+      if (!NON_NAMES.has(firstWord) && name.length > 1) {
+        people.add(name);
+      }
+    }
+
+    // Look for names after prepositions/verbs: "with Sarah", "told John", "from Alice"
+    const prepNamePattern = /(?:with|from|told|asked|met|called|emailed|by|for|and)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/g;
+    while ((match = prepNamePattern.exec(text)) !== null) {
+      const name = match[1].trim();
       const firstWord = name.split(" ")[0];
       if (!NON_NAMES.has(firstWord) && name.length > 1) {
         people.add(name);
