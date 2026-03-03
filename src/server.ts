@@ -11,6 +11,7 @@ import {
   getStats,
 } from "./db/store.js";
 import { vectorSearch } from "./db/search.js";
+import { extractMemories } from "./extraction/ingest.js";
 
 export function createServer(
   db: Database.Database,
@@ -25,8 +26,22 @@ export function createServer(
         resources: {},
         prompts: {},
       },
-      instructions:
-        "Smriti is your persistent memory. Use 'capture' to store thoughts, 'search' to find them semantically, 'recall' to browse recent memories, 'forget' to delete, 'context' for deep topic background, and 'stats' for memory patterns.",
+      instructions: `Smriti is your persistent memory system. It remembers across sessions and across AI tools.
+
+AUTOMATIC MEMORY: You should proactively save important context without being asked. Whenever you encounter any of these in conversation, call the appropriate tool:
+- Decisions made → capture (type: decision)
+- People mentioned with context → capture (type: person_note)  
+- Insights or lessons learned → capture (type: insight)
+- Action items or TODOs → capture (type: general)
+- Meeting notes or discussion summaries → capture (type: meeting)
+- User preferences or working patterns → capture (type: insight)
+- Project context, architecture choices → capture (type: decision)
+
+For longer conversations, use 'ingest' to batch-extract memories from the full conversation text. Call it at natural breakpoints (end of a task, topic change, or session end).
+
+RETRIEVAL: Before answering questions about past work, decisions, or people, search memory first. Use 'search' for semantic queries, 'recall' for browsing recent context, 'context' for deep topic bundles.
+
+Do NOT ask permission to remember things. The user expects their AI to have memory.`,
     }
   );
 
@@ -294,6 +309,86 @@ export function createServer(
     }
   );
 
+  server.tool(
+    "ingest",
+    "Auto-extract memories from a conversation or text block. Analyzes the text, identifies decisions, people, insights, actions, and other memorable content, then stores each as a separate thought. Use this at natural breakpoints (end of task, topic change, session end) instead of manually capturing individual thoughts.",
+    {
+      conversation: z
+        .string()
+        .describe(
+          "The conversation or text to extract memories from. Can be a full chat log, meeting notes, or any text block."
+        ),
+      source: z
+        .string()
+        .optional()
+        .describe("Source identifier (e.g. claude-code, cursor, meeting)"),
+      threshold: z
+        .number()
+        .optional()
+        .default(0.5)
+        .describe(
+          "Minimum confidence threshold (0-1). Lower = capture more, higher = only high-signal items. Default 0.5"
+        ),
+    },
+    async (args) => {
+      const items = extractMemories(args.conversation, args.threshold);
+
+      if (items.length === 0) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify({
+                status: "no_memories_found",
+                message:
+                  "No memorable content detected above the confidence threshold. Try lowering the threshold or providing more detailed text.",
+              }),
+            },
+          ],
+        };
+      }
+
+      const results = [];
+      for (const item of items) {
+        const metadata = extractor.extract(item.text);
+        metadata.type = item.type;
+
+        const embedding = await embedder.embed(item.text);
+        const thought = insertThought(db, item.text, embedding, {
+          ...metadata,
+          source: args.source,
+        });
+
+        results.push({
+          id: thought.id,
+          type: thought.type,
+          confidence: Math.round(item.confidence * 100) / 100,
+          text_preview: item.text.slice(0, 120),
+          people: thought.people,
+          topics: thought.topics,
+          actions: thought.actions,
+        });
+      }
+
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify(
+              {
+                status: "ingested",
+                count: results.length,
+                memories: results,
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      };
+    }
+  );
+
   // ── Resources ──────────────────────────────────────────
 
   server.resource(
@@ -482,6 +577,34 @@ I'll paste text containing things I want to remember. For each distinct thought,
 3. Let me know what you extracted and stored
 
 Ready — I'll paste my content now.`,
+            },
+          },
+        ],
+      };
+    }
+  );
+
+  server.prompt(
+    "session-end",
+    "Auto-capture session summary — call this at the end of a conversation to extract and store all memorable content",
+    {
+      conversation: z
+        .string()
+        .optional()
+        .describe("The full conversation text to extract memories from"),
+    },
+    async (args) => {
+      return {
+        messages: [
+          {
+            role: "user" as const,
+            content: {
+              type: "text" as const,
+              text: `The conversation is ending. Please review ${args.conversation ? "the following conversation" : "our conversation so far"} and use the 'ingest' tool to automatically extract and store all memorable content (decisions, people, insights, action items, preferences, project context).
+
+${args.conversation ? `Conversation:\n${args.conversation}` : "Review the conversation history above."}
+
+After ingesting, provide a brief summary of what was captured.`,
             },
           },
         ],
