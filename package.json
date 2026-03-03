@@ -1,25 +1,47 @@
 {
   "name": "smriti",
   "version": "0.1.0",
-  "description": "Local-first persistent memory for AI agents via MCP",
+  "description": "Local-first persistent memory for AI agents via MCP. Sanskrit for memory (स्मृति). Zero cloud. Zero cost.",
   "type": "module",
   "bin": {
     "smriti": "./dist/index.js"
   },
   "main": "./dist/index.js",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "prepublishOnly": "npm run build"
   },
   "keywords": [
     "mcp",
+    "mcp-server",
     "memory",
     "ai",
-    "sqlite",
+    "ai-agents",
+    "sqlite-vec",
     "vector-search",
-    "embeddings"
+    "embeddings",
+    "local-first",
+    "semantic-search",
+    "claude-code",
+    "cursor",
+    "kiro"
   ],
+  "author": "Bharadwaz Kari <moltizmo@zohomail.com> (https://bharadwazkari.com)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/moltizmo/smriti.git"
+  },
+  "homepage": "https://github.com/moltizmo/smriti#readme",
+  "bugs": {
+    "url": "https://github.com/moltizmo/smriti/issues"
+  },
   "license": "MIT",
   "engines": {
     "node": ">=18"
