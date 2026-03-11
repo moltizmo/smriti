@@ -17,6 +17,7 @@ import { exportToMarkdown } from "./sync/export.js";
 import { importFromMarkdown } from "./sync/import.js";
 import { syncToGit } from "./sync/git.js";
 import { loadConfig } from "./config.js";
+import { getAuthStatus } from "./auth/credentials.js";
 
 export function createServer(
   db: Database.Database,
@@ -492,6 +493,30 @@ Do NOT ask permission to remember things. The user expects their AI to have memo
             thoughts_exported: result.export.thoughts_exported,
             committed: result.committed,
             pushed: result.pushed,
+          }, null, 2),
+        }],
+      };
+    }
+  );
+
+  server.tool(
+    "auth_status",
+    "Check Smriti sync authentication status — whether a GitHub token is stored and which repo memories sync to.",
+    {},
+    async () => {
+      const status = getAuthStatus();
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({
+            authenticated: status.authenticated,
+            username: status.username,
+            sync_repo: status.sync_repo
+              ? `https://github.com/${status.sync_repo}`
+              : null,
+            setup_command: status.authenticated
+              ? null
+              : "smriti auth --token <github_pat>",
           }, null, 2),
         }],
       };

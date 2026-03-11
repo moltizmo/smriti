@@ -1,6 +1,6 @@
 {
   "name": "smriti",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Local-first persistent memory MCP server for AI agents — with consolidation loop and git sync",
   "type": "module",
   "bin": {

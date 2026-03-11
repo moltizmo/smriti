@@ -11,6 +11,12 @@ import { exportToMarkdown } from "./sync/export.js";
 import { importFromMarkdown } from "./sync/import.js";
 import { syncToGit } from "./sync/git.js";
 import { getStats } from "./db/store.js";
+import {
+  saveGitHubToken,
+  clearCredentials,
+  getAuthStatus,
+} from "./auth/credentials.js";
+import { getAuthenticatedUser, ensureSyncRepo } from "./auth/github.js";
 
 const args = process.argv.slice(2);
 const command = args[0];
@@ -88,6 +94,46 @@ async function runCLI() {
       const { insertThought } = await import("./db/store.js");
       const thought = insertThought(db, text, embedding, { ...metadata, source: "cli" });
       console.log(`✅ Captured: ${thought.id} [${thought.type}]`);
+      break;
+    }
+
+    case "auth": {
+      const tokenIdx = args.indexOf("--token");
+      const token = tokenIdx !== -1 ? args[tokenIdx + 1] : process.env["SMRITI_GITHUB_TOKEN"];
+      if (!token) {
+        console.error(
+          "Usage: smriti auth --token <github_pat>\n" +
+          "       SMRITI_GITHUB_TOKEN=<token> smriti auth\n\n" +
+          "Generate a PAT at: https://github.com/settings/tokens\n" +
+          "Required scope: repo (to create/push private repos)"
+        );
+        process.exit(1);
+      }
+      console.log("🔑 Verifying token with GitHub...");
+      const user = await getAuthenticatedUser(token);
+      console.log(`✅ Authenticated as: ${user.login}${user.name ? ` (${user.name})` : ""}`);
+      console.log("📦 Setting up sync repo...");
+      const repo = await ensureSyncRepo(token, user.login);
+      saveGitHubToken(token, user.login, repo.full_name);
+      console.log(`✅ Auth saved. Sync repo: ${repo.html_url}`);
+      console.log(`\nRun 'smriti sync' to push your memories.`);
+      break;
+    }
+
+    case "logout": {
+      clearCredentials();
+      console.log("✅ Credentials cleared.");
+      break;
+    }
+
+    case "whoami": {
+      const status = getAuthStatus();
+      if (!status.authenticated) {
+        console.log("Not authenticated. Run: smriti auth --token <github_pat>");
+      } else {
+        console.log(`Logged in as: ${status.username}`);
+        console.log(`Sync repo:    github.com/${status.sync_repo}`);
+      }
       break;
     }
 
