@@ -10,6 +10,8 @@ interface ThoughtRow {
   topics: string;
   actions: string;
   sentiment: string;
+  tier: string;
+  consolidated_from: string;
   created_at: string;
   updated_at: string;
 }
@@ -63,9 +65,11 @@ export function vectorSearch(
     results.push({
       thought: {
         ...row,
+        tier: (row.tier ?? "working") as import("./store.js").ThoughtTier,
         people: JSON.parse(row.people) as string[],
         topics: JSON.parse(row.topics) as string[],
         actions: JSON.parse(row.actions) as string[],
+        consolidated_from: JSON.parse(row.consolidated_from ?? "[]") as string[],
       },
       distance: vr.distance,
       score: Math.round(Math.max(0, 1 / (1 + vr.distance)) * 100) / 100,

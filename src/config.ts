@@ -15,6 +15,11 @@ export interface SmritiConfig {
     transport: "stdio" | "http";
     port: number;
   };
+  sync: {
+    export_dir: string;
+    repo_path: string | null;
+    auto_sync_hours: number | null;
+  };
 }
 
 const SMRITI_DIR = join(homedir(), ".smriti");
@@ -32,6 +37,11 @@ const DEFAULT_CONFIG: SmritiConfig = {
   server: {
     transport: "stdio",
     port: 3838,
+  },
+  sync: {
+    export_dir: join(SMRITI_DIR, "export"),
+    repo_path: null,
+    auto_sync_hours: null,
   },
 };
 

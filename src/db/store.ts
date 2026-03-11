@@ -1,6 +1,8 @@
 import type Database from "better-sqlite3";
 import { randomUUID } from "node:crypto";
 
+export type ThoughtTier = "working" | "long_term" | "archived";
+
 export interface Thought {
   id: string;
   text: string;
@@ -10,6 +12,8 @@ export interface Thought {
   topics: string[];
   actions: string[];
   sentiment: string;
+  tier: ThoughtTier;
+  consolidated_from: string[];
   created_at: string;
   updated_at: string;
 }
@@ -23,6 +27,8 @@ interface ThoughtRow {
   topics: string;
   actions: string;
   sentiment: string;
+  tier: string;
+  consolidated_from: string;
   created_at: string;
   updated_at: string;
 }
@@ -30,9 +36,11 @@ interface ThoughtRow {
 function rowToThought(row: ThoughtRow): Thought {
   return {
     ...row,
+    tier: (row.tier ?? "working") as ThoughtTier,
     people: JSON.parse(row.people) as string[],
     topics: JSON.parse(row.topics) as string[],
     actions: JSON.parse(row.actions) as string[],
+    consolidated_from: JSON.parse(row.consolidated_from ?? "[]") as string[],
   };
 }
 
@@ -47,14 +55,18 @@ export function insertThought(
     topics?: string[];
     actions?: string[];
     sentiment?: string;
+    tier?: ThoughtTier;
+    consolidated_from?: string[];
   }
 ): Thought {
   const id = `thought_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
   const now = new Date().toISOString();
+  const tier = metadata.tier ?? "working";
+  const consolidated_from = metadata.consolidated_from ?? [];
 
   db.prepare(
-    `INSERT INTO thoughts (id, text, type, source, people, topics, actions, sentiment, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO thoughts (id, text, type, source, people, topics, actions, sentiment, tier, consolidated_from, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     id,
     text,
@@ -64,6 +76,8 @@ export function insertThought(
     JSON.stringify(metadata.topics ?? []),
     JSON.stringify(metadata.actions ?? []),
     metadata.sentiment ?? "neutral",
+    tier,
+    JSON.stringify(consolidated_from),
     now,
     now
   );
@@ -82,9 +96,61 @@ export function insertThought(
     topics: metadata.topics ?? [],
     actions: metadata.actions ?? [],
     sentiment: metadata.sentiment ?? "neutral",
+    tier,
+    consolidated_from,
     created_at: now,
     updated_at: now,
   };
+}
+
+export function updateThoughtTier(
+  db: Database.Database,
+  id: string,
+  tier: ThoughtTier
+): boolean {
+  const now = new Date().toISOString();
+  const result = db
+    .prepare("UPDATE thoughts SET tier = ?, updated_at = ? WHERE id = ?")
+    .run(tier, now, id);
+  return result.changes > 0;
+}
+
+export function archiveThoughts(db: Database.Database, ids: string[]): number {
+  if (ids.length === 0) return 0;
+  const now = new Date().toISOString();
+  let count = 0;
+  for (const id of ids) {
+    const result = db
+      .prepare("UPDATE thoughts SET tier = 'archived', updated_at = ? WHERE id = ?")
+      .run(now, id);
+    count += result.changes;
+  }
+  return count;
+}
+
+export function getAllThoughts(
+  db: Database.Database,
+  opts: { tier?: ThoughtTier | "active"; since?: string } = {}
+): Thought[] {
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+
+  if (opts.tier === "active") {
+    conditions.push("tier IN ('working', 'long_term')");
+  } else if (opts.tier) {
+    conditions.push("tier = ?");
+    params.push(opts.tier);
+  }
+  if (opts.since) {
+    conditions.push("created_at >= ?");
+    params.push(opts.since);
+  }
+
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+  const rows = db
+    .prepare(`SELECT * FROM thoughts ${where} ORDER BY created_at DESC`)
+    .all(...params) as ThoughtRow[];
+  return rows.map(rowToThought);
 }
 
 export function getThought(
@@ -114,10 +180,21 @@ export function getRecentThoughts(
     topic?: string;
     person?: string;
     limit?: number;
+    tier?: ThoughtTier | "active";
   }
 ): Thought[] {
   const conditions: string[] = [];
   const params: unknown[] = [];
+
+  // Default: exclude archived thoughts
+  if (opts.tier === "active") {
+    conditions.push("tier IN ('working', 'long_term')");
+  } else if (opts.tier) {
+    conditions.push("tier = ?");
+    params.push(opts.tier);
+  } else {
+    conditions.push("tier != 'archived'");
+  }
 
   if (opts.days) {
     conditions.push("created_at >= datetime('now', ?)");

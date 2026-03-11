@@ -12,6 +12,11 @@ import {
 } from "./db/store.js";
 import { vectorSearch } from "./db/search.js";
 import { extractMemories } from "./extraction/ingest.js";
+import { consolidateMemories } from "./consolidation/index.js";
+import { exportToMarkdown } from "./sync/export.js";
+import { importFromMarkdown } from "./sync/import.js";
+import { syncToGit } from "./sync/git.js";
+import { loadConfig } from "./config.js";
 
 export function createServer(
   db: Database.Database,
@@ -385,6 +390,110 @@ Do NOT ask permission to remember things. The user expects their AI to have memo
             ),
           },
         ],
+      };
+    }
+  );
+
+  // ── v0.2 Tools ────────────────────────────────────────
+
+  server.tool(
+    "consolidate",
+    "Consolidate memory — merge similar thoughts, promote important ones to long-term, archive stale ones. Run periodically to keep memory lean.",
+    {
+      dry_run: z.boolean().optional().default(false).describe("Preview what would happen without making changes"),
+      days: z.number().optional().default(7).describe("Look back N days for consolidation candidates"),
+    },
+    async (args) => {
+      const result = await consolidateMemories(db, embedder, { dry_run: args.dry_run, days: args.days });
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({
+            ...(args.dry_run ? { mode: "dry_run — no changes made" } : { mode: "applied" }),
+            merged: result.merged,
+            promoted: result.promoted,
+            archived: result.archived,
+            groups: result.groups.map(g => ({
+              summary_preview: g.summary.slice(0, 100),
+              sources: g.source_ids.length,
+            })),
+          }, null, 2),
+        }],
+      };
+    }
+  );
+
+  server.tool(
+    "export",
+    "Export memories to Markdown files for git-based cross-machine sync. Creates memories/YYYY-MM-DD.md, long-term.md, and entities/ files.",
+    {
+      dir: z.string().optional().describe("Export directory (defaults to config sync.export_dir)"),
+      since: z.string().optional().describe("Only export thoughts after this date (ISO format)"),
+    },
+    async (args) => {
+      const config = loadConfig();
+      const exportDir = args.dir ?? config.sync.export_dir;
+      const result = exportToMarkdown(db, exportDir, { since: args.since });
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({
+            status: "exported",
+            thoughts_exported: result.thoughts_exported,
+            files_written: result.files_written.length,
+            export_dir: exportDir,
+            files: result.files_written,
+          }, null, 2),
+        }],
+      };
+    }
+  );
+
+  server.tool(
+    "import",
+    "Import memories from Markdown files (exported by another Smriti instance). Deduplicates by thought ID — safe to run multiple times.",
+    {
+      dir: z.string().optional().describe("Import directory (defaults to config sync.export_dir)"),
+    },
+    async (args) => {
+      const config = loadConfig();
+      const importDir = args.dir ?? config.sync.export_dir;
+      const result = await importFromMarkdown(db, embedder, importDir);
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({
+            status: "imported",
+            imported: result.imported,
+            skipped_duplicates: result.skipped,
+            errors: result.errors,
+            import_dir: importDir,
+          }, null, 2),
+        }],
+      };
+    }
+  );
+
+  server.tool(
+    "sync",
+    "Export memories to Markdown and push to a git repo for cross-machine sync. Configure sync.repo_path in ~/.smriti/config.json.",
+    {
+      repo_path: z.string().optional().describe("Git repo path (overrides config)"),
+    },
+    async (args) => {
+      const config = loadConfig();
+      const repoPath = args.repo_path ?? config.sync.repo_path;
+      const result = syncToGit(db, config.sync.export_dir, repoPath);
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({
+            message: result.message,
+            thoughts_exported: result.export.thoughts_exported,
+            committed: result.committed,
+            pushed: result.pushed,
+          }, null, 2),
+        }],
       };
     }
   );
