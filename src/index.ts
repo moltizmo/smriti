@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { execSync } from "node:child_process";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { loadConfig, ensureSmritiDir } from "./config.js";
 import { initDatabase } from "./db/schema.js";
@@ -16,7 +17,13 @@ import {
   clearCredentials,
   getAuthStatus,
 } from "./auth/credentials.js";
-import { getAuthenticatedUser, ensureSyncRepo } from "./auth/github.js";
+import {
+  getAuthenticatedUser,
+  ensureSyncRepo,
+  requestDeviceCode,
+  pollForToken,
+  hasClientId,
+} from "./auth/github.js";
 
 const args = process.argv.slice(2);
 const command = args[0];
@@ -98,24 +105,54 @@ async function runCLI() {
     }
 
     case "auth": {
-      const tokenIdx = args.indexOf("--token");
-      const token = tokenIdx !== -1 ? args[tokenIdx + 1] : process.env["SMRITI_GITHUB_TOKEN"];
-      if (!token) {
+      if (!hasClientId()) {
         console.error(
-          "Usage: smriti auth --token <github_pat>\n" +
-          "       SMRITI_GITHUB_TOKEN=<token> smriti auth\n\n" +
-          "Generate a PAT at: https://github.com/settings/tokens\n" +
-          "Required scope: repo (to create/push private repos)"
+          "❌ Smriti OAuth App not configured.\n\n" +
+          "To set up your own OAuth App:\n" +
+          "  1. Go to https://github.com/settings/developers → 'New OAuth App'\n" +
+          "  2. Enable 'Device Flow' on the app\n" +
+          "  3. Set SMRITI_CLIENT_ID=<your_client_id> before running smriti auth\n\n" +
+          "If using the official Smriti CLI from npm, this is pre-configured.\n" +
+          "SMRITI_CLIENT_ID env var overrides the default."
         );
         process.exit(1);
       }
-      console.log("🔑 Verifying token with GitHub...");
+
+      console.log("🔑 Connecting to GitHub...");
+      const deviceCode = await requestDeviceCode();
+
+      // Try to open browser automatically
+      const openCmd = process.platform === "darwin" ? "open" :
+                      process.platform === "win32" ? "start" : "xdg-open";
+      try {
+        execSync(`${openCmd} "${deviceCode.verification_uri}"`, { stdio: "ignore" });
+      } catch { /* browser open failed — user will do it manually */ }
+
+      console.log(`\n! First copy your one-time code: ${deviceCode.user_code}`);
+      console.log(`- Then press Enter to open ${deviceCode.verification_uri} in your browser...`);
+
+      // Wait for Enter keypress
+      await new Promise<void>(resolve => {
+        process.stdin.setRawMode?.(true);
+        process.stdin.resume();
+        process.stdin.once("data", () => {
+          process.stdin.setRawMode?.(false);
+          process.stdin.pause();
+          resolve();
+        });
+      });
+
+      console.log("⏳ Waiting for GitHub authorization...");
+      const token = await pollForToken(deviceCode.device_code, deviceCode.interval);
+
       const user = await getAuthenticatedUser(token);
       console.log(`✅ Authenticated as: ${user.login}${user.name ? ` (${user.name})` : ""}`);
+
       console.log("📦 Setting up sync repo...");
       const repo = await ensureSyncRepo(token, user.login);
       saveGitHubToken(token, user.login, repo.full_name);
-      console.log(`✅ Auth saved. Sync repo: ${repo.html_url}`);
+
+      console.log(`✅ Logged in. Sync repo: ${repo.html_url}`);
       console.log(`\nRun 'smriti sync' to push your memories.`);
       break;
     }

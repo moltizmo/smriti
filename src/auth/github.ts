@@ -7,6 +7,94 @@
 const GITHUB_API = "https://api.github.com";
 const SYNC_REPO_NAME = "smriti-memories";
 
+// Register at: https://github.com/settings/developers → OAuth Apps
+// Enable "Device Flow" on the app. Client ID is public — no secret needed.
+// Override with SMRITI_CLIENT_ID env var for forks/custom deployments.
+const OAUTH_CLIENT_ID =
+  process.env["SMRITI_CLIENT_ID"] ?? "Ov23liYOUR_CLIENT_ID_HERE";
+
+// ── Device Flow ─────────────────────────────────────────────────────────────
+
+export interface DeviceCodeResponse {
+  device_code: string;
+  user_code: string;
+  verification_uri: string;
+  expires_in: number;
+  interval: number;
+}
+
+/** Step 1: Request a device code from GitHub */
+export async function requestDeviceCode(): Promise<DeviceCodeResponse> {
+  const res = await fetch("https://github.com/login/device/code", {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      client_id: OAUTH_CLIENT_ID,
+      scope: "repo",
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error(`GitHub device code request failed: ${res.status} ${await res.text()}`);
+  }
+
+  const data = await res.json() as DeviceCodeResponse & { error?: string };
+  if (data.error) {
+    throw new Error(`GitHub error: ${data.error}`);
+  }
+  return data;
+}
+
+export type TokenPollResult =
+  | { status: "complete"; token: string }
+  | { status: "pending" }
+  | { status: "expired" }
+  | { status: "error"; message: string };
+
+/** Step 2: Poll until user completes browser auth */
+export async function pollForToken(
+  deviceCode: string,
+  intervalSec: number
+): Promise<string> {
+  const deadline = Date.now() + 10 * 60 * 1000; // 10 min max
+
+  while (Date.now() < deadline) {
+    await new Promise(r => setTimeout(r, intervalSec * 1000));
+
+    const res = await fetch("https://github.com/login/oauth/access_token", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        client_id: OAUTH_CLIENT_ID,
+        device_code: deviceCode,
+        grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+      }),
+    });
+
+    const data = await res.json() as { access_token?: string; error?: string };
+
+    if (data.access_token) return data.access_token;
+
+    if (data.error === "authorization_pending") continue;
+    if (data.error === "slow_down") { await new Promise(r => setTimeout(r, 5000)); continue; }
+    if (data.error === "expired_token") throw new Error("Device code expired. Run smriti auth again.");
+    if (data.error === "access_denied") throw new Error("Access denied by user.");
+    if (data.error) throw new Error(`GitHub error: ${data.error}`);
+  }
+
+  throw new Error("Auth timed out. Run smriti auth again.");
+}
+
+export function hasClientId(): boolean {
+  return OAUTH_CLIENT_ID !== "Ov23liYOUR_CLIENT_ID_HERE";
+}
+
 async function ghFetch(
   path: string,
   token: string,
