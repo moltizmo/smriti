@@ -11,7 +11,7 @@ const SYNC_REPO_NAME = "smriti-memories";
 // Enable "Device Flow" on the app. Client ID is public — no secret needed.
 // Override with SMRITI_CLIENT_ID env var for forks/custom deployments.
 const OAUTH_CLIENT_ID =
-  process.env["SMRITI_CLIENT_ID"] ?? "Ov23liYOUR_CLIENT_ID_HERE";
+  process.env["SMRITI_CLIENT_ID"] ?? "Ov23li6kZdAWOlq402bQ";
 
 // ── Device Flow ─────────────────────────────────────────────────────────────
 
