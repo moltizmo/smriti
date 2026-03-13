@@ -166,7 +166,7 @@ async function runCLI() {
     case "whoami": {
       const status = getAuthStatus();
       if (!status.authenticated) {
-        console.log("Not authenticated. Run: smriti auth --token <github_pat>");
+        console.log("Not authenticated. Run: smriti auth");
       } else {
         console.log(`Logged in as: ${status.username}`);
         console.log(`Sync repo:    github.com/${status.sync_repo}`);

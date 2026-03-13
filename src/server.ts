@@ -516,7 +516,7 @@ Do NOT ask permission to remember things. The user expects their AI to have memo
               : null,
             setup_command: status.authenticated
               ? null
-              : "smriti auth --token <github_pat>",
+              : "smriti auth",
           }, null, 2),
         }],
       };
