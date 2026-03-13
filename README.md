@@ -27,11 +27,41 @@ npm install -g smriti
 ## Usage
 
 ```bash
-# stdio mode (for Claude Code, Cursor, etc.)
+# MCP server — stdio mode (for Claude Code, Cursor, etc.)
 smriti
 
-# HTTP mode (for remote agents)
+# MCP server — HTTP mode (for remote agents)
 smriti --http --port 3838
+```
+
+## CLI Quick Reference
+
+```bash
+# Capture a memory
+smriti capture "We chose PostgreSQL over MySQL for the new service"
+
+# Semantic search
+smriti search "database decisions"
+
+# Browse recent memories (last 7 days)
+smriti recall --days 7
+
+# Browse by topic
+smriti recall "authentication"
+
+# Batch-extract memories from a conversation or document
+smriti ingest --text "Long meeting notes or conversation log..." --threshold 0.4
+
+# Memory stats
+smriti stats
+
+# Sync to GitHub (requires: smriti auth)
+smriti sync
+
+# GitHub auth
+smriti auth
+smriti whoami
+smriti logout
 ```
 
 ## MCP Client Configuration

@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "smriti": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "smriti@latest"]
+    }
+  }
+}

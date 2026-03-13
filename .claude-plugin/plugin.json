@@ -1,0 +1,13 @@
+{
+  "name": "smriti",
+  "description": "Local-first persistent memory for AI agents. One brain, every agent, zero cloud. Capture, search, and recall across all your Claude sessions using semantic vector search.",
+  "author": {
+    "name": "Moltizmo / BZLABS",
+    "email": "moltizmo@zohomail.com",
+    "url": "https://github.com/moltizmo/smriti"
+  },
+  "homepage": "https://github.com/moltizmo/smriti",
+  "license": "MIT",
+  "version": "0.3.2",
+  "keywords": ["memory", "mcp", "local-first", "sqlite", "semantic-search", "persistence"]
+}
