@@ -25,7 +25,7 @@ export function createServer(
   extractor: MetadataExtractor
 ): McpServer {
   const server = new McpServer(
-    { name: "smriti", version: "0.1.0" },
+    { name: "smriti", version: "0.3.2" },
     {
       capabilities: {
         tools: {},
