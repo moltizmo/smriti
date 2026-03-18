@@ -78,7 +78,7 @@ export function syncToGit(
       export: exportResult,
       committed: false,
       pushed: false,
-      message: `Not authenticated. Run: npx smriti auth --token <github_pat>`,
+      message: `Not authenticated. Run: npx smriti auth`,
     };
   }
 
